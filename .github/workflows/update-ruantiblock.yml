@@ -20,8 +20,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: |
-          pip install idna
+        run: pip install idna
 
       - name: Process Domain and IP lists
         run: |
@@ -40,16 +39,7 @@ jobs:
               grep -v '^$' | \
               tr '[:upper:]' '[:lower:]' | \
               sort -u | \
-              python3 -c "
-import sys, idna
-for line in sys.stdin:
-    line = line.strip()
-    if line:
-        try:
-            print(idna.encode(line).decode('ascii'))
-        except Exception:
-            print(line)
-" | \
+              python3 -c "import sys, idna; [print(idna.encode(l.strip()).decode('ascii')) if l.strip() else None for l in sys.stdin]" | \
               awk '{print "nftset=/" $0 "/4#ip#r#d"}' > "ruantiblock_configs/$output_file"
           }
 
