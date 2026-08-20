@@ -1,0 +1,90 @@
+name: Generate RuAntiblock 3.0 Configs
+
+on:
+  schedule:
+    # Автозапуск каждый день в 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  build-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          pip install idna
+
+      - name: Process Domain and IP lists
+        run: |
+          mkdir -p ruantiblock_configs
+
+          # Функция обработки списков доменов в nftset формат
+          process_domain_list() {
+            local url="$1"
+            local output_file="$2"
+
+            echo "Processing domains: $url -> $output_file"
+
+            curl -sSL "$url" | \
+              sed -E 's/#.*//; s/\/\/.*//; s/^(DOMAIN-SUFFIX|DOMAIN|DOMAIN-KEYWORD),//I' | \
+              sed -E 's/^[[:space:]\.\+\@]+//; s/[[:space:]\.\+\@]+$//' | \
+              grep -v '^$' | \
+              tr '[:upper:]' '[:lower:]' | \
+              sort -u | \
+              python3 -c "
+import sys, idna
+for line in sys.stdin:
+    line = line.strip()
+    if line:
+        try:
+            print(idna.encode(line).decode('ascii'))
+        except Exception:
+            print(line)
+" | \
+              awk '{print "nftset=/" $0 "/4#ip#r#d"}' > "ruantiblock_configs/$output_file"
+          }
+
+          # Функция обработки списков IP / CIDR
+          process_ip_list() {
+            local url="$1"
+            local output_file="$2"
+
+            echo "Processing IPs: $url -> $output_file"
+
+            curl -sSL "$url" | \
+              sed -E 's/#.*//; s/\/\/.*//; s/^(IP-CIDR|IP-CIDR6),//I' | \
+              sed -E 's/^[[:space:]\.\+\@]+//; s/[[:space:]\.\+\@]+$//' | \
+              grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?|^([0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F]{1,4}(/[0-9]{1,3})?' | \
+              sort -u > "ruantiblock_configs/$output_file"
+          }
+
+          # Обработка ваших 5 источников
+          process_domain_list "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Categories/geoblock.lst" "geoblock.lst"
+          process_domain_list "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/google-gemini.list" "google-gemini.lst"
+          process_domain_list "https://raw.githubusercontent.com/itdoginfo/allow-domains/refs/heads/main/Services/youtube.lst" "youtube.lst"
+          process_domain_list "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/telegram.list" "telegram-domain.lst"
+          
+          process_ip_list "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geoip/telegram.list" "telegram.ip"
+
+      - name: Commit and Push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add ruantiblock_configs/
+          
+          if git diff --staged --quiet; then
+            echo "Нет изменений для коммита."
+          else
+            git commit -m "Auto-update RuAntiblock 3.0 configs [$(date -u +'%Y-%m-%d %H:%M UTC')]"
+            git push
+          fi
