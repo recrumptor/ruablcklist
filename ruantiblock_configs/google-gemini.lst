@@ -27,6 +27,7 @@ nftset=/gemini.google.com/4#ip#r#d
 nftset=/gemini.gstatic.com/4#ip#r#d
 nftset=/geminiweb-pa.clients.google.com/4#ip#r#d
 nftset=/geminiweb-pa.clients6.google.com/4#ip#r#d
+nftset=/gemma.ai/4#ip#r#d
 nftset=/generativeai.google/4#ip#r#d
 nftset=/generativelanguage.googleapis.com/4#ip#r#d
 nftset=/jules.google/4#ip#r#d
